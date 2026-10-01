@@ -91,9 +91,9 @@
 # Declaración de uso de IA
 
 + herramienta utilizada; Gemini Pro
-+ tareas para las que se utilizó; 
-+ cómo se verificaron sus respuestas;
-+ al menos un ejemplo relevante de utilización.
-+ tiempo necesario para hacer este ejercicio.
++ tareas para las que se utilizó; Ayuda para explicacion de partes de codigo y a la redaccion del README
++ cómo se verificaron sus respuestas; Buscando en google otras fuentes que verifiquen la respuesta
++ al menos un ejemplo relevante de utilización: Interpretacion del error del caracter R utilizado en C++ y no en C
++ tiempo necesario para hacer este ejercicio: ~2horas
 
 
