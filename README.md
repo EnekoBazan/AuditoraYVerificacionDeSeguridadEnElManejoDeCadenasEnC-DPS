@@ -99,7 +99,7 @@ Se han aplicado tres técnicas:
 
 
 
-# Evidencias de los Probleos IdentificadosProblema
+# Evidencias de los Probleos Identificados
 
  1.  ARR30-C — Acceso a punteros argv sin validar argc
   * Test o entrada: Ejecución sin argumentos por línea de comandos (.\exe).
@@ -135,7 +135,22 @@ Se han aplicado tres técnicas:
 
 # TECNICAS DE VERIFICACION
 
-# Prueba 1 — STR31-C (Desbordamiento de buffer en `key[24]` mediante argumentos largos `argv`):**
+# Prueba 1 — ARR30-C (Falta de comprobación de argumentos `argc`):
+
+1. Original 
+PS> .\original_test.exe
+exampleStrings.c
+PS> # El programa sufre un Crash inmediato por desreferencia de puntero NULL en strcpy(key, argv[1])
+
+2. Fixed
+PS> .\fixed.exe
+exampleStrings_fixed.c
+
+Continue? [y] n: n
+PS> # La condición if (argc >= 3) previene el error y permite una ejecución controlada
+
+
+# Prueba 2 — STR31-C (Desbordamiento de buffer en `key[24]` mediante argumentos largos `argv`):**
 
 1. Original 
 PS> .\original_test.exe AAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB
@@ -170,7 +185,7 @@ Hello
 World
 
 
-# Prueba 2 — MSC24-C / STR31-C (Desbordamiento de buffer en gets vs fgets)
+# Prueba 3 — MSC24-C / STR31-C (Desbordamiento de buffer en gets vs fgets)
 1. Original 
 PS-> .\original_test.exe a b                 
 exampleStrings.c
@@ -193,7 +208,7 @@ World
 Hello
 World
 
-# Prueba 3 — STR30-C (Violación de acceso al modificar ptr_char verificada con $LASTEXITCODE):
+# Prueba 4 — STR30-C (Violación de acceso al modificar ptr_char verificada con $LASTEXITCODE):
 
 1. Original 
 PS> .\original_test.exe a b
@@ -217,7 +232,7 @@ Foobar
 PS> $LASTEXITCODE
 0
 
-# Prueba 4 — STR32-C (Test unitario y de regresión en tests/test_str32.c):
+# Prueba 5 — STR32-C (Test unitario y de regresión en tests/test_str32.c):
 PS> gcc -std=c11 -Wall -Wextra -Wpedantic tests/test_str32.c -o tests/test_str32.exe
 PS> .\tests\test_str32.exe
 [Original] ¿Existe terminador '\0' dentro de los 16 bytes de array3?: NO (VULNERABLE: strlen leera fuera de limites)
@@ -227,9 +242,13 @@ EXITO: Todas las aserciones (assertions) de verificacion se cumplieron.
 # Declaración de uso de IA
 
 + herramienta utilizada; Gemini Pro
-+ tareas para las que se utilizó; Ayuda para explicacion de partes de codigo y a la redaccion del README
++ tareas para las que se utilizó; 
+    * Explicación de fallos
+    * Consulta, correlación y justificación técnica de las reglas CERT C
+    * Interpretación de códigos de error del sistema operativo
+    * Estructuración y redacción técnica
 + cómo se verificaron sus respuestas; Buscando en google otras fuentes que verifiquen la respuesta
 + al menos un ejemplo relevante de utilización: Interpretacion del error del caracter R utilizado en C++ y no en C
-+ tiempo necesario para hacer este ejercicio: ~2horas
++ tiempo necesario para hacer este ejercicio: ~4horas
 
 
