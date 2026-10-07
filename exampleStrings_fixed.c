@@ -65,7 +65,6 @@ int main(int argc, char *argv[])
     /* CORRECCIÓN (STR30-C): Declaración como array en la pila para permitir modificaciones seguras */
     char ptr_char[] = "new string literal";
     
-    /* Se añaden (void) para suprimir los warnings de variables no utilizadas sin alterar la estructura original */
     int size_array1 = strlen("аналитик");
     (void)size_array1;
     int size_array2 = 100;

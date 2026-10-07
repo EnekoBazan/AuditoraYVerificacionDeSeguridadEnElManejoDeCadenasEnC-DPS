@@ -88,6 +88,142 @@
     * Corrección: Declarar la variable original como un array modificable en la pila: char ptr_char[] = "new string literal";
 
 
+# Técnicas de verificación utilizadas
+Se han aplicado tres técnicas:
+
+1. Tests funcionales con casos límite diseñados manualmente: Inyección de cadenas que superan el tamaño de los buffers (`response[8]`) y ejecución omitiendo argumentos de entrada (`argv`).
+2. Inspección del código de salida del proceso en el Sistema Operativo (`$LASTEXITCODE`): Verificación en PowerShell del código devuelto tras la ejecución para detectar violaciones de acceso a memoria (*Access Violation* `-1073741819` / `0xC0000005`) que ocurren al final del programa sin mostrar mensajes tras los `printf`.
+3. Tests unitarios y de regresión mediante `assertions`: Verificación aislada con `<assert.h>` y `memchr` para comprobar la terminación nula de los arrays tras `strncpy`.
+
+
+
+
+
+# Evidencias de los Probleos IdentificadosProblema
+
+ 1.  ARR30-C — Acceso a punteros argv sin validar argc
+  * Test o entrada: Ejecución sin argumentos por línea de comandos (.\exe).
+  * Técnica: Test funcional de caso límite por omisión de parámetros.
+  * Resultado en código original (original_test.exe): Fallo crítico (Crash / Violación de acceso). El programa imprime el nombre del archivo y finaliza inmediatamente al ejecutar strcpy(key, argv[1]) sobre un puntero nulo (NULL), sin llegar a solicitar entrada por teclado.   
+  * Resultado en código corregido (fixed.exe): Ejecución controlada. La guarda if (argc >= 3) detecta la ausencia de argumentos, asigna "Argumentos insuficientes" al buffer de forma segura mediante snprintf y permite que el flujo continúe hasta terminar con código de salida 0.   
+  
+2.  MSC24-C / STR31-C — Desbordamiento de pila en get_y_or_n mediante gets(response)
+    * Test o entrada: Ejecución estándar (.\exe a b) e introducción de una cadena de más de 80 caracteres 'A' en la pregunta Continue? [y] n:.   
+    * Técnica: Test funcional con caso límite de desbordamiento de entrada (Buffer Overflow).
+    * Resultado en código original (original_test.exe): Fallo crítico (Stack Smashing). La función gets escribe fuera de los 8 bytes del array response y sobrescribe la dirección de retorno en la pila. El sistema operativo aborta el proceso de inmediato al pulsar Enter, impidiendo que se impriman las cadenas posteriores (Foobar).   
+    * Resultado en código corregido (fixed.exe): Ejecución segura. La función fgets(response, sizeof(response), stdin) trunca la entrada a un máximo de 7 caracteres legibles y añade el terminador nulo \0. La pila permanece íntegra, el programa imprime Foobar y finaliza correctamente.   
+
+3. STR30-C — Modificación de literal de cadena en .rodata (ptr_char[0] = 'N')
+    * Test o entrada: Ejecución normal respondiendo y (.\exe a b) y lectura inmediata de la variable de entorno $LASTEXITCODE en PowerShell.   
+    * Técnica: Análisis de código de retorno del sistema operativo tras ejecución funcional.
+    * Resultado en código original (original_test.exe): Fallo por violación de acceso. Aunque los mensajes printf se muestran en pantalla, la instrucción ptr_char[0] = 'N' intenta escribir en la sección de memoria de solo lectura (.rodata). $LASTEXITCODE devuelve -1073741819 (0xC0000005, Access Violation).   
+    * Resultado en código corregido (fixed.exe): Ejecución limpia. La variable se declara como un array en la pila (char ptr_char[]), permitiendo la modificación de sus elementos sin invadir memoria protegida. $LASTEXITCODE devuelve 0.   
+    
+4. STR32-C — Ausencia de terminador nulo tras strncpy hacia array3[16]
+    * Test o entrada: Ejecución del binario unitario .\tests\test_str32.exe.
+    * Técnica: Test unitario y de regresión automatizado mediante aserciones (<assert.h>) e inspección de memoria con memchr.
+    * Resultado en código original: Vulnerabilidad confirmada. La función memchr(array3_orig, '\0', 16) devuelve NULL, demostrando que al truncar una cadena de 17 caracteres sobre un buffer de 16, strncpy no inserta el carácter nulo. La posterior llamada a strlen(array3) provoca una lectura fuera de límites (Out-of-bounds read).   
+    * Resultado en código corregido: Verificación por aserción superada. Se copian sizeof - 1 bytes y se fuerza array3[15] = '\0'. memchr localiza el terminador y assert(strlen(array3_fixed) == 15) valida que la lectura se mantiene dentro de los límites seguros de memoria.   
+5. STR31-C — Desbordamiento del array key[24] con argumentos extensos
+    * Test o entrada: Ejecución pasando dos argumentos de 20 caracteres cada uno: .\exe AAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB.   
+    * Técnica: Test funcional de caso límite sobrepasando el límite de almacenamiento.
+    * Resultado en código original (original_test.exe): Corrupción de memoria / Comportamiento indefinido. La concatenación con strcpy y strcat genera una cadena de más de 43 bytes sobre un espacio reservado de 24, invadiendo variables contiguas en la pila.   
+    * Resultado en código corregido (fixed.exe): Truncamiento seguro. La función snprintf(key, sizeof(key), ...) limita la salida a 23 caracteres legibles más el byte nulo terminador, garantizando que el array nunca desborde su memoria asignada.
+
+
+
+
+# TECNICAS DE VERIFICACION
+
+# Prueba 1 — STR31-C (Desbordamiento de buffer en `key[24]` mediante argumentos largos `argv`):**
+
+1. Original 
+PS> .\original_test.exe AAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB
+exampleStrings.c
+
+Continue? [y] n: y
+Foobar
+Foobar
+
+Hello
+World
+
+
+
+Hello
+World
+PS> #Se queda pillado/ Undefined Behavior
+
+2. Fixed
+PS> .\fixed.exe AAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBB
+exampleStrings_fixed.c
+
+Continue? [y] n: y
+Foobar
+Foobar
+
+Hello
+World
+
+
+Hello
+World
+
+
+# Prueba 2 — MSC24-C / STR31-C (Desbordamiento de buffer en gets vs fgets)
+1. Original 
+PS-> .\original_test.exe a b                 
+exampleStrings.c
+
+Continue? [y] n: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+PS> # Aborta por corrupcion de pila sin imprimir Foobar
+
+2. Fixed
+PS-> .\fixed.exe a b
+exampleStrings_fixed.c
+
+Continue? [y] n: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+Foobar
+Foobar
+
+Hello
+World
+
+
+Hello
+World
+
+# Prueba 3 — STR30-C (Violación de acceso al modificar ptr_char verificada con $LASTEXITCODE):
+
+1. Original 
+PS> .\original_test.exe a b
+exampleStrings.c
+
+Continue? [y] n: y
+Foobar
+Foobar
+...
+PS> $LASTEXITCODE
+-1073741819
+
+2. Fixed
+PS> .\fixed.exe a b
+exampleStrings_fixed.c
+
+Continue? [y] n: y
+Foobar
+Foobar
+...
+PS> $LASTEXITCODE
+0
+
+# Prueba 4 — STR32-C (Test unitario y de regresión en tests/test_str32.c):
+PS> gcc -std=c11 -Wall -Wextra -Wpedantic tests/test_str32.c -o tests/test_str32.exe
+PS> .\tests\test_str32.exe
+[Original] ¿Existe terminador '\0' dentro de los 16 bytes de array3?: NO (VULNERABLE: strlen leera fuera de limites)
+[Corregido] ¿Existe terminador '\0' dentro de los 16 bytes de array3?: SI (strlen seguro = 15)
+EXITO: Todas las aserciones (assertions) de verificacion se cumplieron.
+
 # Declaración de uso de IA
 
 + herramienta utilizada; Gemini Pro
